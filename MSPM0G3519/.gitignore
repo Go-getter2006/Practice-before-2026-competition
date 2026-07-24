@@ -1,0 +1,31 @@
+# Keil output
+Output/
+Objects/
+Listings/
+*.axf
+*.hex
+*.bin
+*.map
+*.lst
+*.o
+*.d
+*.crf
+*.htm
+
+# Keil personal/user files
+*.uvguix.*
+*.uvgui.*
+*.bak
+*.dep
+*.scvd
+
+# VS Code cache
+.vscode/ipch/
+.vscode/.browse.VC.db*
+.vscode/*.db
+
+# Logs
+*.log
+
+# Temporary
+*.tmp
