@@ -1,4 +1,4 @@
-[README.md](https://github.com/user-attachments/files/30354814/README.md)
+[README.md](https://github.com/user-attachments/files/30355839/README.md)
 <h1 align="center">小车与一维云台联合控制系统设计</h1>
 
 <p align="center"><strong>全国大学生电子设计竞赛 · 任务实施方案</strong></p>
@@ -295,14 +295,17 @@ YOLO11 对每个图案输出类别 $c_j$、检测框中心 $(x_j,y_j)$ 和置信
 建立统一角度坐标系：以雷达零点和云台机械零点为 $0^{\circ}$，逆时针为正。设雷达检测到的小车方位角为 $\theta_c\in[0,360^{\circ})$，云台当前绝对角为 $\theta_g\in[0,360^{\circ})$，标志板正面相对云台零点的安装补偿角为 $\theta_0$，则目标绝对角为
 
 $$
-\theta_t=\operatorname{mod}\left(\theta_c-\theta_0+360^{\circ}\right).
+\theta_t
+=\left(\theta_c-\theta_0+360^{\circ}\right)
+\;\mathrm{mod}\; 360^{\circ}.
 $$
 
 若云台只允许顺时针转动，顺时针相对转角应为
 
 $$
 \Delta\theta_{\mathrm{cw}}
-  =\operatorname{mod}\left(\theta_g-\theta_t+360^{\circ}\right).
+=\left(\theta_g-\theta_t+360^{\circ}\right)
+\;\mathrm{mod}\; 360^{\circ}.
 $$
 
 当计算结果落入零角死区 $[0,\varepsilon]$ 时，为保证 $360^{\circ}$ 工况仍执行完整旋转过程，可令
@@ -373,27 +376,25 @@ $$
 
 视觉串口帧结构为
 
-$$
-\mathtt{FF}\;\mathtt{N}\;\mathtt{DATA[0]}\cdots
-  \mathtt{DATA[N-1]}\;\mathtt{BCC}\;\mathtt{FE}.
-$$
+```text
+FF N DATA[0] ... DATA[N-1] BCC FE
+```
 
-其中 $N$ 为有效数据字节数，异或校验为
+其中 $N$ 为有效数据字节数，异或校验可写为
 
-$$
-\mathtt{BCC}=\mathtt{FF}\oplus \mathtt{N}
-  \oplus\mathtt{DATA[0]}\oplus\cdots\oplus\mathtt{DATA[N-1]}.
-$$
+```c
+BCC = 0xFF ^ N ^ DATA[0] ^ ... ^ DATA[N - 1];
+```
 
 本方案建议数据区至少包含排列方式、四个象限类别、平均置信度和帧序号。小车只接受长度正确、BCC 正确且排列码属于四种合法状态的帧；多帧未及时处理时只保留最新有效结果。
 
 ## 小车至云台
 
-小车停车并完成电机锁止后发送联动帧
+小车停车并完成电机锁止后发送联动帧：
 
-$$
-\mathtt{FF\ AA\ FE},
-$$
+```text
+FF AA FE
+```
 
 表示“任务一小车已停止，允许云台开始测角和旋转”。云台控制器仅在完整匹配该帧后锁存启动事件，避免雷达串口数据中偶然出现单字节相同值造成误触发。系统复位或异常停止可预留独立停止帧，并在云台侧优先级最高地执行零力矩/停止控制。
 
@@ -409,19 +410,29 @@ MS42DC 的 TTL 串口位置控制命令采用 11 字节帧：
 <p align="center"><sub>MS42DC 相对位置控制帧</sub></p>
 
 
-其中模式 `0x02` 为相对位置控制，方向 `0x00` 在本云台机构上经实测对应顺时针， `0x20` 表示 32 细分；位置按 $0.1^{\circ}$ 放大后发送，速度以 rad/s 为单位放大 10 倍发送。 BCC 为前 9 个字节的异或和。若计算得到命令角度为 $\Delta\theta_{\mathrm{cmd}}$，则
+其中模式 `0x02` 为相对位置控制，方向 `0x00` 在本云台机构上经实测对应顺时针，`0x20` 表示 32 细分；位置按 $0.1^{\circ}$ 放大后发送，速度以 rad/s 为单位放大 10 倍发送。BCC 为前 9 个字节的异或和。
+
+若计算得到命令角度为 $\Delta\theta_{\mathrm{cmd}}$，由于命令角度为非负值，可用下式完成四舍五入：
 
 $$
-P=\operatorname{round}\left(10\Delta\theta_{\mathrm{cmd}}\right),\qquad
-  \mathtt{POS\_H}=P\gg 8,\quad
-  \mathtt{POS\_L}=P\ \&\ \mathtt{0xFF}.
+P=\left\lfloor
+10\Delta\theta_{\mathrm{cmd}}+0.5
+\right\rfloor.
 $$
 
-电机状态采用请求反馈方式。STM32 发送
+位置字段的高、低字节使用 C 位运算拆分：
 
-$$
-\mathtt{7B\ 01\ 00\ 00\ 00\ 00\ 00\ 00\ 00\ 7A\ 7D}
-$$
+```c
+uint16_t position = (uint16_t)P;
+uint8_t POS_H = (uint8_t)((position >> 8) & 0xFF);
+uint8_t POS_L = (uint8_t)(position & 0xFF);
+```
+
+电机状态采用请求反馈方式。STM32 发送：
+
+```text
+7B 01 00 00 00 00 00 00 00 7A 7D
+```
 
 请求实时速度和位置。反馈数据中的位置为带符号 32 位数并放大 10 倍；控制器完成 BCC 校验后再更新角度状态。请求式反馈可避免连续反馈占用串口带宽。
 
