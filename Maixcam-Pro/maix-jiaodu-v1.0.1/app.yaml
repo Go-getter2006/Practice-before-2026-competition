@@ -1,0 +1,8 @@
+id: jiaodu
+name: 旋转角度
+version: 1.0.1
+author: li
+icon: app.png
+desc: wuwu
+files:
+  - 111.py
